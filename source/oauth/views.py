@@ -1,6 +1,8 @@
 import requests
 import jwt
 import time
+import json
+
 
 from django.conf import settings
 from django.shortcuts import redirect
@@ -15,6 +17,7 @@ from .serializers import *
 from users.models import UserModel
 from users.views import LoginView, UserView
 from users.serializers import CreateUserSerializer
+from django.http import JsonResponse
 
 class UserView2():
     permission_classes = [AllowAny]
@@ -29,6 +32,9 @@ class UserView2():
         serializer.create(validated_data=user)
 
         return Response(data=user, status=status.HTTP_201_CREATED)
+
+
+        
 
 def login_api(social_type: str, social_id: str, email: str=None, phone: str=None):
     '''
@@ -55,6 +61,7 @@ def login_api(social_type: str, social_id: str, email: str=None, phone: str=None
         login = user_view.get_or_create_user(data=data)
 
         response = login_view.object(data=data) if login.status_code == 201 else login
+        print(response)
 
     return response
 
@@ -69,8 +76,6 @@ class KakaoLoginView(APIView):
     def get(self, request):
         '''
         kakao code 요청
-
-        ---
         '''
         client_id = settings.KAKAO_REST_API_KEY
         print(client_id)
@@ -83,40 +88,51 @@ class KakaoLoginView(APIView):
 
 class KakaoCallbackView(APIView):
     permission_classes = [AllowAny]
+    print("kakaocallback에 들어옴")
 
-    @swagger_auto_schema(query_serializer=CallbackUserInfoSerializer)
+    @swagger_auto_schema(query_serializer=CallbackUserCSRFInfoSerializer)
     def get(self, request):
         '''
         kakao access_token 및 user_info 요청
-
-        ---
         '''
         data = request.query_params
-
+        print(data)
+        print("get 들어옴")
+        print(request)
         # access_token 발급 요청
         code = data.get('code')
+        print("code는",code)
+        # code2 = code[6:]
+        # print("##########")
+        # print("code2는",code2)
         if not code:
             return Response(status=status.HTTP_400_BAD_REQUEST)
-
+        print("조건문 넘어감")
         request_data = {
             'grant_type': 'authorization_code',
-            'client_id': settings.KAKAO_REST_API_KEY,
-            'redirect_uri': settings.KAKAO_REDIRECT_URI,
-            'client_secret': settings.KAKAO_CLIENT_SECRET_KEY,
+            'client_id': "edf8f58de6f9fb90e53e2dd72452c71f",
+            'redirect_uri': "http://localhost:3000/accounts/kakao/callback/",
+            'client_secret': "NTPCyiFtCARiGAU58nf2HBaybwy329xZ", 
             'code': code,
         }
+        print("request_data 는 ",request_data)
         token_headers = {
             'Content-type': 'application/x-www-form-urlencoded;charset=utf-8'
         }
-        token_res = requests.post(kakao_token_uri, data=request_data, headers=token_headers)
-
+        token_res = requests.post(kakao_token_uri, data=request_data, headers=token_headers) # 여기서 프론트한테 간다.
+        print("*****")
+        print(token_res.text)
+        #time.sleep(3)
+        print("token_res는 ", token_res)
         token_json = token_res.json()
         access_token = token_json.get('access_token')
         print("accsess token 은", access_token)
 
         if not access_token:
+            print("access token 없어서 조건문 들어옴")
             return Response(status=status.HTTP_400_BAD_REQUEST)
         access_token = f"Bearer {access_token}"  # 'Bearer ' 마지막 띄어쓰기 필수
+        #print("ffffffff",access_token)
 
         # kakao 회원정보 요청
         auth_headers = {
@@ -133,11 +149,62 @@ class KakaoCallbackView(APIView):
         if not kakao_account:
             return Response(status=status.HTTP_400_BAD_REQUEST)
         user_email = kakao_account.get('email')
+        print(kakao_account)
+        print(kakao_account.get('profile').get('nickname'))
+        user_name = kakao_account.get('profile').get('nickname')
+        print("get으로 들어와서 성공해서 출렧한 이메일입니다.",end='')
         print(user_email)
+        global dic
+        dic = {}
+        dic['name'] = user_name
+        dic['email'] = user_email
+        print(dic)
+        return JsonResponse(dic)
+        # res = login_api(social_type=social_type, social_id=social_id, email=user_email)
+        # return res
+    
+    # @swagger_auto_schema(query_serializer=CallbackUserCSRFInfoSerializer)
+    # def post(self, request):
+    #     print("post로 들어옴")
+    #     print(request.data)
+    #     access_token = request.data['access_token']
+    #     #access_token = token_json.get('access_token')
+    #     print("accsess token 은", access_token)
 
-        # 회원가입 및 로그인
-        res = login_api(social_type=social_type, social_id=social_id, email=user_email)
-        return res
+    #     # data = json.loads(request.body)
+        
+    #     # # 'access_token' 값 추출
+    #     # access_token = data.get('access_token')
+
+    #     if not access_token:
+    #         print("access token 없어서 조건문 들어옴")
+    #         return Response(status=status.HTTP_400_BAD_REQUEST)
+    #     #access_token = f"Bearer {access_token}"  # 'Bearer ' 마지막 띄어쓰기 필수
+    #     print("진짜 access_token은" , access_token)
+
+    #     # kakao 회원정보 요청
+    #     auth_headers = {
+    #         "Authorization": access_token,
+    #         "Content-type": "application/x-www-form-urlencoded;charset=utf-8",
+    #     }
+    #     user_info_res = requests.get(kakao_profile_uri, headers=auth_headers)
+    #     print('ffffffffff')
+    #     print(user_info_res.text)
+    #     print(user_info_res)
+    #     user_info_json = user_info_res.json()
+
+    #     social_type = 'kakao'
+    #     social_id = f"{social_type}_{user_info_json.get('id')}"
+
+    #     kakao_account = user_info_json.get('kakao_account')
+    #     if not kakao_account:
+    #         return Response(status=status.HTTP_400_BAD_REQUEST)
+    #     user_email = kakao_account.get('email')
+    #     print(user_email)
+
+    #     res = login_api(social_type=social_type, social_id=social_id, email=user_email)
+    #     return res
+
 
 
 naver_login_url = "https://nid.naver.com/oauth2.0/authorize"
@@ -174,7 +241,7 @@ class NaverCallbackView(APIView):
         ---
         '''
         data = request.query_params
-
+        print("get 들어옴")
         # access_token 발급 요청
         code = data.get('code')
         user_state = data.get('state')
@@ -220,6 +287,7 @@ class NaverCallbackView(APIView):
         # 회원가입 및 로그인
         res = login_api(social_type=social_type, social_id=social_id, email=user_email)
         return res
+    
 
 
 google_login_url = "https://accounts.google.com/o/oauth2/v2/auth"

@@ -26,6 +26,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('oauth.urls')),
     path('users/', include('users.urls', namespace='users')),
+    path('applyjob/',include('applyjob.urls')),
+    path('company/',include('company.urls'))
 ]
 
 # 디버그일때 swagger api 실행
